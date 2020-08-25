@@ -1,17 +1,31 @@
 import asammdf
 from asammdf import MDF
 import glob
+import pandas as pd
 
-path = "C:\\Users\\Z0050908\Documents\\Reinj_data\\Raw data\\GWM_TimeSycn_142_2020_07_11_070917_log_001.mf4"
+def load_dbc(dbc_file_dir):
+    dbc = glob.glob(dbc_file_dir + "*.dbc")
+    return dbc
 
-dbc_path = "C:\\Users\\Z0050908\\Downloads\\"
+def read_mf4(file_path, dbc):
+    mdf = MDF(file_path, "r")
+    information = mdf.extract_can_logging(dbc)
+    data = information.to_dataframe()
+    return data
 
-mdf = MDF(path, "r")
-dbc = glob.glob(dbc_path + "*.dbc")
+def extract_wanted_signal_data(dataframe, signal_excel_path):
+    signals = pd.read_excel(signal_excel_path)
+    names = list(signals["Name"])
+    return dataframe.loc[:, names]
 
-information = mdf.extract_can_logging(dbc)
-print(information.to_dataframe())
+if __name__ == "__main__":
+    path = "C:\\Users\\Z0050908\\Documents\\Reinj_data\\Raw data\\GWM_TimeSycn_142_2020_07_11_070917_log_001.mf4"
 
-data = information.get_can_signal('EyeQ_Frame_ID_HIL')
+    dbc_path = "C:\\Users\\Z0050908\\Downloads\\"
+    signal = "C:\\Users\\Z0050908\\Desktop\\FR-IFC-Private CAN_Checklist.xlsx"
 
-print(data)
+    print(pd.read_excel(signal))
+    # dbc = load_dbc(dbc_path)
+    # data = read_mf4(path, dbc)
+    # print(data.shape)
+    # print(extract_wanted_signal_data(data, signal))

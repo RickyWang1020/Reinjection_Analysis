@@ -1,12 +1,18 @@
 """
 Function: process raw data excel (original and Reinjection data), generate aligned pandas dataframes, perform mean and standard deviation operation on Reinjection data, and can filter out potential problematic data (those with large std)
 Author: Xinran Wang
-Date: 07/22/2020
+Date: 08/18/2020
 """
 
 import pandas as pd
 import xlrd
 import os
+import asammdf
+from asammdf import MDF
+import glob
+
+pd.set_option('display.max_columns', 8)
+pd.set_option('expand_frame_repr', False)
 
 def search_dir(directory):
     """
@@ -14,28 +20,68 @@ def search_dir(directory):
     :param directory: the absolute path of the folder storing all the excel files
     :return: a tuple, original_file is a string of original file's name (if no such file exists, it will be None), test_file is a list containing the strings of names of Reinjection files
     """
-    files = os.listdir(directory)
+    folders = os.listdir(directory)
 
-    original_file = None
-    test_file = []
+    original_dir = None
+    test_dir = []
 
+    for d in folders:
+        if "original" in d:
+            original_dir = os.path.join(directory, d)
+        else:
+            test_dir.append(os.path.join(directory, d))
+
+    # original_file = None
+    # test_file = []
+    #
+    # for f in files:
+    #     if f.endswith(".mf4"):
+    #         # original file name not sure...
+    #         if f.startswith("Original"):
+    #             original_file = f
+    #         else:
+    #             test_file.append(f)
+
+    return original_dir, test_dir
+
+def list_file_path(path):
+    file_paths = []
+    files = os.listdir(path)
     for f in files:
-        if f.endswith(".XLS"):
-            if f.startswith("Reinjection"):
-                test_file.append(f)
-            elif f.startswith("Original"):
-                original_file = f
-
-    return original_file, test_file
+        if f.endswith(".mf4"):
+            file_paths.append(os.path.join(path, f))
+    return file_paths
 
 def generate_file_path(directory, name):
-    """
-    Generates the path of a file
-    :param directory: the absolute path of the folder storing all the excel files
-    :param name: the name of one file
-    :return: a string of the file's absolute path
-    """
-    return directory + "\\" + name
+
+    return os.path.join(directory, name)
+
+def generate_wanted_signal(signal_path):
+    signals = pd.read_excel(signal_path)
+    first_priority = signals[(signals["Priority"] == 1) & (signals["Alignment"] == "Agree")]
+    camera_id = "Camera_ID"
+    for i in first_priority["Name"]:
+        if "camera" in i.lower() and "id" in i.lower():
+            camera_id = i
+            break
+    enum_list = list(first_priority[first_priority["Value Table"] == "Enumeration"]["Name"])
+    enum_list.append(camera_id)
+    val_list = list(first_priority[first_priority["Value Table"] == "None"]["Name"])
+    return enum_list, val_list, camera_id
+
+def read_all_and_combine(dir_list, dbc, wanted_enum, wanted_val, cam_id_name):
+    enum_list = []
+    val_list = []
+    for dir in dir_list:
+        raw = load_one_test_data(dbc, dir)
+        enum_df = remove_dup(dropnan(raw.loc[:, wanted_enum]), cam_id_name)
+        val_df = remove_dup(dropnan(raw.loc[:, wanted_val]), cam_id_name)
+        enum_list.append(enum_df)
+        val_list.append(val_df)
+    enum = pd.concat(enum_list, ignore_index=True)
+    val = pd.concat(val_list, ignore_index=True)
+    return enum, val
+
 
 def load_and_concat_original_data(path):
     """
@@ -66,57 +112,17 @@ def check_first_row(dataframe, header_list):
     """
     return list(dataframe.loc[0]) == header_list
 
-def load_and_concat_test_data(path):
+def load_one_test_data(dbc, data_path):
     """
     Load one Reinjection data excel and concat all the sheets to one pandas dataframe
     :param path: the absolute path of one Reinjection data excel
     :return: a pandas dataframe that all the sheets of one Reinjection data excel are concatenated in
     """
-    dataframe = pd.DataFrame()
-    old_header_list = ["t[s]",
-                       "EYEQDG_CMN_Params_s.COM_Cam_Frame_ID_b32[]",
-                       "EYEQDG_CMN_Params_s.COM_EyeQ_Frame_ID_b32[]",
-                       "EYEQDG_OBJT_Params_s.EYEQDG_OBJTvO_Params_as._0_.OBJ_Lat_Distance_b12[]",
-                       "EYEQDG_CMN_Params_s.COM_Sync_Frame_ID_b8[]",
-                       "EYEQDG_OBJT_Params_s.EYEQDG_OBJTvH_Params_s.OBJ_Sync_ID_b8[]",
-                       "EYEQDG_OBJT_Params_s.EYEQDG_OBJTvH_Params_s.OBJ_VD_CIPV_ID_b8[]",
-                       "EYEQDG_OBJT_Params_s.EYEQDG_OBJTvH_Params_s.OBJ_VD_CIPV_Lost_b2[]",
-                       "EYEQDG_OBJT_Params_s.EYEQDG_OBJTvO_Params_as._0_.OBJ_ID_b8[]",
-                       "EYEQDG_OBJT_Params_s.EYEQDG_OBJTvO_Params_as._0_.OBJ_Relative_Long_Velocity_b13[]",
-                       "EYEQDG_OBJT_Params_s.EYEQDG_OBJTvO_Params_as._0_.OBJ_Long_Distance_b14[]"]
-    header_list = ['T', 'Cam_id', 'EQ_id', 'Lat_D', 'Com_Sync_id', 'OBJ_Sync_id', 'OBJ_CIPV_ID', 'OBJ_CIPV_Lost',
-                   'OBJ_id', 'OBJ_Re_Long_V', 'OBJ_Long_D']
-    data = xlrd.open_workbook(path)
-    # note down the name of the last sheet because we need to delete the final 8 rows that are not numeric data
-    final_sheet_name = data.sheets()[-1].name
-
-    for sheet in data.sheets():
-        name = sheet.name
-        print("Processing:", name)
-
-        if name == final_sheet_name:
-            df = pd.read_excel(path, names=header_list, header=None, sheet_name=name, skipfooter=8)
-        else:
-            df = pd.read_excel(path, names=header_list, header=None, sheet_name=name)
-
-        # not sure whether which sheet will include the header row, so use this function to check
-        if check_first_row(df, old_header_list):
-            df = df.drop(0)
-
-        dataframe = pd.concat([dataframe, df], ignore_index=True, sort=False)
+    mdf = MDF(data_path, "r")
+    information = mdf.extract_can_logging(dbc)
+    dataframe = information.to_dataframe()
 
     return dataframe
-
-def shift_columns(dataframe):
-    """
-    Shift the columns of dataframes to make one group of data align to one row
-    :param dataframe: a pandas dataframe
-    :return: a pandas dataframe after shifting columns
-    """
-    dataframe_copy = dataframe.copy()
-    for index, col in enumerate(dataframe.columns[2:]):
-        dataframe_copy[col] = dataframe_copy[col].shift(index+1)
-    return dataframe_copy
 
 def dropnan(dataframe):
     """
@@ -124,89 +130,77 @@ def dropnan(dataframe):
     :param dataframe: a pandas dataframe
     :return: a pandas dataframe after dropping
     """
-    return dataframe.dropna(subset = ['Cam_id'])
+    return dataframe.dropna(subset = ['Camera_Frame_ID_HIL'])
 
-def remove_dup(dataframe):
+def remove_dup(dataframe, cam_id_name):
     """
     Drop rows that have duplicated camera id (keep the first duplicated camera id data)
     :param dataframe: a pandas dataframe
     :return: a pandas dataframe after removing duplicates
     """
-    dataframe.drop_duplicates(subset='Cam_id', inplace=True)
+    dataframe.drop_duplicates(subset=cam_id_name, inplace=True)
     return dataframe
 
-def remove_outlier(dataframe, outlier_range, to_detect = 'OBJ_Long_D'):
-    """
-    Remove the outlier of a specific column of dataframe
-    :param dataframe: a pandas dataframe
-    :param outlier_range: a list containing the values that are view as outliers
-    :param to_detect: a string corresponding to the column on the dataframe, indicating the data to look into
-    :return: a pandas dataframe after removing outliers
-    """
-    filt = (dataframe[to_detect].isin(outlier_range)) # currently set to an array of outlier values
-    after_remove = dataframe.drop(dataframe[filt].index)
-    after_remove = after_remove.reset_index(drop=True)
-    return after_remove
+def generate_dataframe(directory, dbc_file_dir, enum_list, val_list, cam_id_name):
 
-def generate_dataframe(directory):
-    """
-    Call this function to read data from directory and get the processed original and Reinjection dataframes
-    :param directory: the absolute path of the folder storing all the excel files
-    :return: a tuple, original_df is a pandas dataframe of original data, test_df_array is a list containing dataframes corresponding to every Reinjection data excel files
-    """
-    original_name, test_names = search_dir(directory)
-    test_df_array = []
-    original_path = generate_file_path(directory, original_name)
-    original_df = remove_dup(dropnan(shift_columns(load_and_concat_original_data(original_path))))
-    # -200 is for Reinjection purpose
-    original_df = remove_outlier(original_df, [-200])
-    original_df = remove_outlier(original_df, [-100], "Lat_D")
-    original_df = remove_outlier(original_df, [0], "Cam_id")
+    dbc = glob.glob(dbc_file_dir + "*.dbc")
 
-    for n in test_names:
-        path = generate_file_path(directory, n)
-        test_df = remove_dup(dropnan(shift_columns(load_and_concat_test_data(path))))
-        # -200 is for Reinjection purpose
-        test_df = remove_outlier(test_df, [-200])
-        test_df = remove_outlier(test_df, [0], "Cam_id")
-        test_df_array.append(test_df)
-    return original_df, test_df_array
+    ori_dir, t_dir = search_dir(directory)
+    print(ori_dir)
+    print(t_dir)
+
+    original_enum, original_val = read_all_and_combine(list_file_path(ori_dir), dbc, enum_list, val_list, cam_id_name)
+    test_df_enum_arr = []
+    test_df_val_arr = []
+
+    for t in t_dir:
+        file_paths = list_file_path(t)
+        test_e, test_v = read_all_and_combine(file_paths, dbc, enum_list, val_list, cam_id_name)
+        test_df_enum_arr.append(test_e)
+        test_df_val_arr.append(test_v)
+
+    # if original_name:
+    #     original_path = generate_file_path(directory, original_name)
+    #     original_df = remove_dup(dropnan(load_and_concat_original_data(original_path)))
+    #
+    # for n in test_names:
+    #     print("Processing: " + n)
+    #     path = generate_file_path(directory, n)
+    #     data = load_one_test_data(dbc, path)
+    #     enum_df = remove_dup(dropnan(data.loc[:, enum_list]), cam_id_name).set_index(cam_id_name)
+    #     val_df = remove_dup(dropnan(data.loc[:, val_list]), cam_id_name).set_index(cam_id_name)
+    #     test_df_enum_arr.append(enum_df)
+    #     test_df_val_arr.append(val_df)
+    return original_enum, original_val, test_df_enum_arr, test_df_val_arr
 
 
 # below is further data analysis and calculation
 
-def drop_zero_and_na(dataframe):
+def drop_zero_and_na(dataframe, cam_id):
     """
     Drop columns that include NaN or camera id is 0
     :param dataframe: a pandas dataframe (after combining original dataframe with Reinjection dataframes)
     :return: a pandas dataframe after dropping
     """
     new = dataframe.reset_index(drop=True)
-    new = new.drop(dataframe[dataframe["Cam_id"] == 0].index)
+    new = new.drop(dataframe[dataframe[cam_id] == 0].index)
     new = new.dropna()
+    new = new.reset_index(drop=True)
     return new
 
-def merge_and_calculate(original, test_list, to_analysis):
-    """
-    Call this function to merge original data and Reinjection data into one dataframe by the type of value to analysis, generate mean and std values of Reinjection data and add to the end of merged dataframe
-    :param original: a pandas dataframe containing all data in original data excel
-    :param test_list: a list containing several pandas dataframes, each dataframe holds data of corresponding Reinjection data excel
-    :param to_analysis: a string corresponding to the column on the dataframes, indicating the data to look into
-    :return:
-    """
-    original_selected = original.loc[:, ["Cam_id", to_analysis]]
+def merge_and_calculate(original, test_list, to_analysis, cam_id_name):
+
+    merged = original.loc[:, [cam_id_name, to_analysis]]
     test_selected = []
     for df in test_list:
-        data = df.loc[:, ["Cam_id", to_analysis]]
+        data = df.loc[:, [cam_id_name, to_analysis]]
         test_selected.append(data)
-    merged = pd.merge(original_selected, test_selected[0], on = "Cam_id", how = "outer")
-    for index in range(1, len(test_selected)):
-        merged = pd.merge(merged, test_selected[index], on = "Cam_id", how = "outer")
+    for idx in range(len(test_selected)):
+        merged = pd.merge(merged, test_selected[idx], on=cam_id_name, how="outer")
     name_list = [to_analysis + "_test" + str(j+1) for j in range(len(test_selected))]
-    merged.columns = ["Cam_id", "Original"] + name_list
-    merged = drop_zero_and_na(merged)
-    # print(merged["Cam_id"].min())
-    merged = merged.reset_index(drop=True)
+    merged.columns = [cam_id_name, "Original"] + name_list
+    merged = drop_zero_and_na(merged, cam_id_name)
+
     merged["test_mean"] = merged[name_list].mean(axis=1)
     merged["test_std"] = merged[name_list].std(axis=1)
     return merged
@@ -218,9 +212,6 @@ def large_std_cam_id(dataframe, std_lower_bound):
     :param std_lower_bound: the lower bound of "too large std", any std over this value will be considered as a potential abnormal point
     :return: a list containing numbers representing the camera ids of potential abnormal points
     """
-    # print(dataframe)
-    # print(dataframe["test_std"])
-    # print(dataframe["test_std"].max())
     filt = (dataframe["test_std"] >= std_lower_bound)
     return list(dataframe[filt]["Cam_id"])
 
@@ -268,3 +259,29 @@ def convert_t_to_interval(time_and_id):
             break
     return interval
 
+if __name__ == "__main__":
+    path = "C:\\Users\\Z0050908\\Desktop\\hil_test\\"
+
+    dbc_path = "C:\\Users\\Z0050908\\Downloads\\"
+    signal = "C:\\Users\\Z0050908\\Desktop\\FR-IFC-Private CAN_Checklist.xlsx"
+
+    e, v, cam = generate_wanted_signal(signal)
+    # ori, enum, val = generate_dataframe(path, dbc_path, e, v, cam)
+    #
+    # print(merge_and_calculate(ori, val, "BridgeDistance"))
+
+    # dbc = glob.glob(dbc_path + "*.dbc")
+    #
+    # ori_dir, t_dir = search_dir(path)
+    # print(list_file_path(ori_dir))
+    # for t in t_dir:
+    #     file_paths = list_file_path(t)
+    #     print(read_all_and_combine(file_paths, dbc, e, v, cam))
+    """
+    ['C:\\Users\\Z0050908\\Desktop\\hil_test\\original\\GWM_TimeSycn_142_2020_07_11_070917_log_001.mf4', 'C:\\Users\\Z0050908\\Desktop\\hil_test\\original\\GWM_TimeSycn_142_2020_07_11_070917_log_002.mf4', 'C:\\Users\\Z0050908\\Desktop\\hil_test\\original\\GWM_TimeSycn_142_2020_07_11_070917_log_003.mf4']
+    ['C:\\Users\\Z0050908\\Desktop\\hil_test\\test1\\GWM_TimeSycn_142_2020_07_11_070917_log_test_001.mf4', 'C:\\Users\\Z0050908\\Desktop\\hil_test\\test1\\GWM_TimeSycn_142_2020_07_11_070917_log_test_002.mf4', 'C:\\Users\\Z0050908\\Desktop\\hil_test\\test1\\GWM_TimeSycn_142_2020_07_11_070917_log_test_003.mf4']
+    ['C:\\Users\\Z0050908\\Desktop\\hil_test\\test2\\GWM_TimeSycn_142_2020_07_11_070917_log_test_001.mf4', 'C:\\Users\\Z0050908\\Desktop\\hil_test\\test2\\GWM_TimeSycn_142_2020_07_11_070917_log_test_002.mf4', 'C:\\Users\\Z0050908\\Desktop\\hil_test\\test2\\GWM_TimeSycn_142_2020_07_11_070917_log_test_003.mf4']
+    """
+
+    o_e, o_v, t_e, t_v = generate_dataframe(path, dbc_path, e, v, cam)
+    print(merge_and_calculate(o_v, t_v, "BridgeDistance", cam))

@@ -1,8 +1,7 @@
 
 path:
-  path_data_excel: C:\Users\Z0050908\Documents\Jupyter_scipt\group5\group5\Result analysis
+  path_data_dir: C:\Users\Z0050908\Desktop\hil_test
+  path_dbc_dir: C:\Users\Z0050908\Downloads
+  path_signal_excel: C:\Users\Z0050908\Desktop\FR-IFC-Private CAN_Checklist.xlsx
   path_to_create_folder: C:\Users\Z0050908\Desktop
-  folder_name: Figures
-
-vars_to_analyze: ["Lat_D", "OBJ_Re_Long_V", "OBJ_Long_D"]
 

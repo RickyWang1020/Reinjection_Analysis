@@ -1,7 +1,7 @@
 """
 Function: process raw data excel (original and Reinjection data), generate aligned pandas dataframes, perform mean and standard deviation operation on Reinjection data, and can filter out potential problematic data (those with large std)
 Author: Xinran Wang
-Date: 08/18/2020
+Date: 08/26/2020
 """
 
 import pandas as pd
@@ -10,6 +10,8 @@ import os
 import asammdf
 from asammdf import MDF
 import glob
+
+import time
 
 pd.set_option('display.max_columns', 8)
 pd.set_option('expand_frame_repr', False)
@@ -57,6 +59,9 @@ def generate_file_path(directory, name):
     return os.path.join(directory, name)
 
 def generate_wanted_signal(signal_path):
+
+    start_time = time.time()
+
     signals = pd.read_excel(signal_path)
     first_priority = signals[(signals["Priority"] == 1) & (signals["Alignment"] == "Agree")]
     camera_id = "Camera_ID"
@@ -67,19 +72,30 @@ def generate_wanted_signal(signal_path):
     enum_list = list(first_priority[first_priority["Value Table"] == "Enumeration"]["Name"])
     enum_list.append(camera_id)
     val_list = list(first_priority[first_priority["Value Table"] == "None"]["Name"])
+
+    end_time = time.time()
+    print("Time spent on extracting wanted signals from excel: " + str(end_time - start_time) + " seconds")
+
     return enum_list, val_list, camera_id
 
 def read_all_and_combine(dir_list, dbc, wanted_enum, wanted_val, cam_id_name):
+
+    start_time = time.time()
+
     enum_list = []
     val_list = []
     for dir in dir_list:
         raw = load_one_test_data(dbc, dir)
-        enum_df = remove_dup(dropnan(raw.loc[:, wanted_enum]), cam_id_name)
-        val_df = remove_dup(dropnan(raw.loc[:, wanted_val]), cam_id_name)
+        enum_df = remove_dup(dropnan(raw.reindex(columns=wanted_enum)), cam_id_name)
+        val_df = remove_dup(dropnan(raw.reindex(columns=wanted_val)), cam_id_name)
         enum_list.append(enum_df)
         val_list.append(val_df)
     enum = pd.concat(enum_list, ignore_index=True)
     val = pd.concat(val_list, ignore_index=True)
+
+    end_time = time.time()
+    print("Time spent on generating the dataframe for " + str(dir_list) + " is: " + str(end_time - start_time) + " seconds")
+
     return enum, val
 
 
@@ -143,11 +159,11 @@ def remove_dup(dataframe, cam_id_name):
 
 def generate_dataframe(directory, dbc_file_dir, enum_list, val_list, cam_id_name):
 
+    start_time = time.time()
+
     dbc = glob.glob(dbc_file_dir + "*.dbc")
 
     ori_dir, t_dir = search_dir(directory)
-    print(ori_dir)
-    print(t_dir)
 
     original_enum, original_val = read_all_and_combine(list_file_path(ori_dir), dbc, enum_list, val_list, cam_id_name)
     test_df_enum_arr = []
@@ -159,18 +175,9 @@ def generate_dataframe(directory, dbc_file_dir, enum_list, val_list, cam_id_name
         test_df_enum_arr.append(test_e)
         test_df_val_arr.append(test_v)
 
-    # if original_name:
-    #     original_path = generate_file_path(directory, original_name)
-    #     original_df = remove_dup(dropnan(load_and_concat_original_data(original_path)))
-    #
-    # for n in test_names:
-    #     print("Processing: " + n)
-    #     path = generate_file_path(directory, n)
-    #     data = load_one_test_data(dbc, path)
-    #     enum_df = remove_dup(dropnan(data.loc[:, enum_list]), cam_id_name).set_index(cam_id_name)
-    #     val_df = remove_dup(dropnan(data.loc[:, val_list]), cam_id_name).set_index(cam_id_name)
-    #     test_df_enum_arr.append(enum_df)
-    #     test_df_val_arr.append(val_df)
+    end_time = time.time()
+    print("Total time spent on generating original and test dataframes from mf4 files: " + str(end_time - start_time) + " seconds")
+
     return original_enum, original_val, test_df_enum_arr, test_df_val_arr
 
 
@@ -284,4 +291,23 @@ if __name__ == "__main__":
     """
 
     o_e, o_v, t_e, t_v = generate_dataframe(path, dbc_path, e, v, cam)
-    print(merge_and_calculate(o_v, t_v, "BridgeDistance", cam))
+    print(o_e)
+    print(o_v)
+    print(t_e)
+    print(t_v)
+
+# the structure of the to-analysis directory:
+#     |
+#     -- original data folder
+#     ------ original mf4 1
+#     ------ original mf4 2
+#     ------ ...
+#     -- test data 1 folder
+#     ------ test 1 mf4 1
+#     ------ test 1 mf4 2
+#     ------ ...
+#     -- test data 2 folder
+#     ------ test 2 mf4 1
+#     ------ test 2 mf4 2
+#     ------ ...
+#     -- ...

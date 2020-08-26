@@ -1,3 +1,9 @@
+"""
+Function: test functions of reading mf4 files using the corresponding dbc and extract the wanted signals from excel
+Author: Xinran Wang
+Date: 08/26/2020
+"""
+
 import asammdf
 from asammdf import MDF
 import glob

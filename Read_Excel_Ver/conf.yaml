@@ -1,0 +1,9 @@
+
+path:
+  path_data_excel: C:\Users\Z0050908\Desktop\to_analysis
+  path_to_create_folder: C:\Users\Z0050908\Desktop
+  folder_name: Figure2x
+
+plot_data: ["Line01_HeadingAngle[rad]", "Line01_Dy[m]", "Line01_Curv[1/m]", "Line02_HeadingAngle[rad]", "Line02_Dy[m]", "Line02_Curv[1/m]", "obj01_abs_Ax[m/s^2]", "obj01_abs_Ay[m/s^2]", "obj01_Rel_Vx[m/s]", "obj01_Rel_Vy[m/s]", "obj01_Width[m]", "obj01_Heading[rad]", "obj01_Type"]
+
+plot_data_and_stats: ["obj01_Dx[m]", "obj01_Dy[m]"]

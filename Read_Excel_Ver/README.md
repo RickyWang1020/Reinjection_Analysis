@@ -1,8 +1,8 @@
-# Reinjection Analysis (Reading from Excel Version)
+# Reinjection Analysis (Reading from CSV Version)
 
 ## About
 
-This version of Reinjection Analysis Program can read data from Excel files and generate plots with mean and standard deviation statistics.
+This version of Reinjection Analysis Program can read data from CSV files and generate plots with mean and standard deviation statistics.
 
 Demo figures can be accessed in the `Demo_fig` folder inside this directory.
 

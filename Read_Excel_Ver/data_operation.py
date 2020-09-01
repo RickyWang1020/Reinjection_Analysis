@@ -17,7 +17,7 @@ def search_dir(directory):
     """
     In the given directory, find original data and Reinjection data, and output their names
     :param directory: the absolute path of the folder storing all the excel files
-    :return: a tuple, original_file is a string of original file's name (if no such file exists, it will be None), test_file is a list containing the strings of names of Reinjection files
+    :return: a list containing the strings of names of Reinjection test files
     """
     files = os.listdir(directory)
 
@@ -45,7 +45,6 @@ def load_and_concat_data(path):
     :param path: the absolute path of the original data excel
     :return: a pandas dataframe that all the sheets of the original data excel are concatenated in
     """
-
     header_list = ["t[s]", "Camera_Frame_ID", "EyeQ_Frame_ID", "Line01_HeadingAngle[rad]", "Line01_Dy[m]",\
                    "Line01_Curv[1/m]", "Line02_HeadingAngle[rad]", "Line02_Dy[m]", "Line02_Curv[1/m]",\
                    "obj01_abs_Ax[m/s^2]", "obj01_abs_Ay[m/s^2]", "obj01_Rel_Vx[m/s]", "obj01_Rel_Vy[m/s]",\
@@ -58,7 +57,7 @@ def load_and_concat_data(path):
 
 def shift_columns(dataframe):
     """
-    Shift the columns of dataframes to make one group of data align to one row
+    Shift the columns of dataframes to make one group of data align to one row (used to process the old version of messy column data)
     :param dataframe: a pandas dataframe
     :return: a pandas dataframe after shifting columns
     """
@@ -70,7 +69,7 @@ def shift_columns(dataframe):
 def fill_na_and_remove_dup(dataframe):
     """
     Fill NAs with bfill method and remove duplicated data
-    :param dataframe:
+    :param dataframe: a pandas dataframe
     :return: the processed new dataframe
     """
     new_dataframe = dataframe.fillna(method='bfill')
@@ -130,7 +129,7 @@ def merge_and_calculate(test_list, to_analysis):
     Call this function to merge original data and Reinjection data into one dataframe by the type of value to analysis, generate mean and std values of Reinjection data and add to the end of merged dataframe
     :param test_list: a list containing several pandas dataframes, each dataframe holds data of corresponding Reinjection data excel
     :param to_analysis: a string corresponding to the column on the dataframes, indicating the data to look into
-    :return:
+    :return: a dataframe containing merged test data of a specific data value type
     """
     # stores all the test case's corresponding columns with respect to to_analysis
     test_selected = []
@@ -152,8 +151,9 @@ def merge_and_calculate(test_list, to_analysis):
 
 def large_std_cam_id(dataframe, percentile=0.95):
     """
-    Pick out the camera ids that have too large std values (larger than some pre-set lower bound)
+    Pick out the camera ids that have too large std values (larger than some pre-set percentile lower bound)
     :param dataframe: a pandas dataframe that has gone through merge_and_calculate operation
+    :param percentile: the percentile of the std lower bound
     :return: a list containing numbers representing the camera ids of potential abnormal points
     """
     # currently, set the lower bound to 95% largest data std
@@ -165,7 +165,7 @@ def convert_to_interval(id_array):
     """
     Convert some consecutive timestamps' id to some intervals for easier retrieval
     :param id_array: a list containing all the camera ids of outliers
-    :return: a list of strings, each string is either a time range, or a single timestamp
+    :return: a list of strings representing the abnormal camera id ranges
     """
     interval = []
     current_interval = [id_array[0]]

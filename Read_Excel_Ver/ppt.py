@@ -13,6 +13,7 @@ from pptx.util import Inches, Pt
 from pptx.enum.text import PP_PARAGRAPH_ALIGNMENT
 from change_line_test import *
 
+
 def generate_ppt(fig_path, abnormal_dic, target_dir):
     """
     Generate the powerpoint, each page has one figure; for the merged dataframe, the outlier interval will also be listed on the powerpoint; the powerpoint will be saved in the same directory as this project

@@ -1,7 +1,7 @@
 """
 Function: process raw data excel (original and Reinjection data), generate aligned pandas dataframes, perform mean and standard deviation operation on Reinjection data, and can filter out potential problematic data (those with large std)
 Author: Xinran Wang
-Date: 08/26/2020
+Date: 09/02/2020
 """
 
 # suggested folder structures:
@@ -29,8 +29,10 @@ from asammdf import MDF
 import glob
 import time
 from process_data import *
+from plot import *
+import sys
 
-
+sys.setrecursionlimit(100000)
 pd.set_option('display.max_columns', 8)
 pd.set_option('expand_frame_repr', False)
 
@@ -40,6 +42,7 @@ def search_dir(directory):
     In the given directory, find original data and Reinjection data, and output their names
     :param directory: the absolute path of the folder storing all the excel files
     :return: a dictionary containing keys as the data name (original, test file No.), value as a list of files in this folder
+    example output: {"original": [o_dir1, o_dir2, ...], "test1": [t1_dir1, t1_dir2, ...], "test2": [...], ...}
     """
     folders = os.listdir(directory)
 
@@ -98,37 +101,23 @@ def generate_wanted_signal(signal_path):
             camera_id = i
             break
     enum_list = list(first_priority[first_priority["Value Table"] == "Enumeration"]["Name"])
-    enum_list.append(camera_id)
     val_list = list(first_priority[first_priority["Value Table"] == "None"]["Name"])
-
+    enum_list.append(camera_id)
     end_time = time.time()
     print("Time spent on extracting wanted signals from excel: " + str(end_time - start_time) + " seconds")
 
     return enum_list, val_list, camera_id
 
 
-def read_all_and_combine(dir_list, dbc, wanted_enum, wanted_val, cam_id_name):
-
-    start_time = time.time()
-
-    enum_list = []
-    val_list = []
-    for directory in dir_list:
-        raw = load_one_test_data(dbc, directory)
-        enum_df = remove_dup(dropnan(raw.reindex(columns=wanted_enum)), cam_id_name)
-        val_df = remove_dup(dropnan(raw.reindex(columns=wanted_val)), cam_id_name)
-        enum_list.append(enum_df)
-        val_list.append(val_df)
-    enum = pd.concat(enum_list, ignore_index=True)
-    val = pd.concat(val_list, ignore_index=True)
-
-    end_time = time.time()
-    print("Time spent on generating the dataframe for " + str(dir_list) + " is: " + str(end_time - start_time) + " seconds")
-
-    return enum, val
-
-
 def load_mf4_to_dic_for_all(data_path_dic, dbc, total_wanted):
+    """
+    Based on the given dictionary containing all data files' paths, extract all the dictionary-form data using loadMF4data2Dict
+    :param data_path_dic: the directory of data file
+    :param dbc: the total_fullpath variable generated from load_total_matrix
+    :param total_wanted: the wanted signals for extracting data
+    :return: a dictionary containing keys as the data name (original, test file No.), value as a list of dictionaries, each dictionary contains the data of one file in this folder
+    example output: {"original": [{Idx1: df1, Idx2: df2, ...}, {Idx1': df1', Idx2': df2', ...}, ...], "test1": [{Idx1: df1, Idx2: df2, ...}, {Idx1': df1', Idx2': df2', ...}, ...], "test2": [...], ...}
+    """
     data_dic = {}
     for k in data_path_dic:
         data_dic[k] = []
@@ -138,56 +127,84 @@ def load_mf4_to_dic_for_all(data_path_dic, dbc, total_wanted):
 
 
 def merge_one_type_data(data_dictionary, to_analysis, cam_id_name):
-    
+    """
+    Based on the given signal to analysis, generate the full dataframe
+    :param data_dictionary: the dictionary with key as the data folders' names and the value as a list of dictionaries, each dictionary holding the data for one file in that data folder
+    :param to_analysis: the signal to analysis
+    :param cam_id_name: a string representing the name of the camera id's name in the data columns
+    :return: the merged dataframe, and the list containing all the test data's names (for further detection of the existence of test data)
+    """
+    ori_name_list = [cam_id_name]
+    test_name_list = []
+
     # first generate the dataframe for original data
-    to_analysis_ori = [i[to_analysis] for i in data_dictionary["original"]]
-    if len(to_analysis_ori) > 1:
+    to_analysis_ori = [i[to_analysis] for i in data_dictionary["original"] if i[to_analysis] is not None]
+    if len(to_analysis_ori) == 0:
+        merged = pd.DataFrame()
+    elif len(to_analysis_ori) > 1:
         merged = pd.concat(to_analysis_ori)
     else:
         merged = to_analysis_ori[0]
-    cam_id_ori = [o[cam_id_name] for o in data_dictionary["original"]]
-    if len(cam_id_ori) > 1:
+        
+    cam_id_ori = [o[cam_id_name] for o in data_dictionary["original"] if o[cam_id_name] is not None]
+    if len(cam_id_ori) == 0:
+        original_cam_id = pd.DataFrame()
+    elif len(cam_id_ori) > 1:
         original_cam_id = pd.concat(cam_id_ori)
     else:
         original_cam_id = cam_id_ori[0]
     merged = original_cam_id.join(merged, how="outer")
-    
-    name_list = [cam_id_name, to_analysis + "_original"]
+    # fill the NAs in the original cam ids and delete all the NAs in the signal data accordingly
+    merged[cam_id_name].fillna(method="ffill", inplace=True)
+    merged[cam_id_name].fillna(method="bfill", inplace=True)
+    # merged.fillna(method="ffill", inplace=True)
+    # merged.fillna(method="bfill", inplace=True)
+    merged = merged.dropna()
+    merged = remove_dup(merged, cam_id_name)
+
+    if merged.shape[1] > 1:
+        ori_name_list.append(to_analysis + "_original")
 
     # then generate the dataframe for test data
     for k in sorted(list(data_dictionary.keys())):
         if k != "original":
-            to_analysis_test = [d[to_analysis] for d in data_dictionary[k]]
-            cam_id_test = [d[cam_id_name] for d in data_dictionary[k]]
-            if len(to_analysis_test) > 1:
+            to_analysis_test = [d[to_analysis] for d in data_dictionary[k] if d[to_analysis] is not None]
+            cam_id_test = [d[cam_id_name] for d in data_dictionary[k] if d[cam_id_name] is not None]
+            if len(to_analysis_test) == 0:
+                dataframe = pd.DataFrame()
+            elif len(to_analysis_test) > 1:
                 dataframe = pd.concat(to_analysis_test)
             else:
                 dataframe = to_analysis_test[0]
-            if len(cam_id_test) > 1:
+
+            if len(cam_id_test) == 0:
+                cam_id_test_total = pd.DataFrame()
+            elif len(cam_id_test) > 1:
                 cam_id_test_total = pd.concat(cam_id_test)
             else:
                 cam_id_test_total = cam_id_test[0]
             dataframe = cam_id_test_total.join(dataframe, how="outer")
+            # after joining, fill in all the missing cam ids for current test case, and remove duplicated cam ids' data
+            dataframe[cam_id_name].fillna(method="ffill", inplace=True)
+            dataframe[cam_id_name].fillna(method="bfill", inplace=True)
+            dataframe = dataframe.dropna()
+            dataframe = remove_dup(dataframe, cam_id_name)
+
+            # merge the dataframe to the result, and fill in all the missing values in other data columns
             merged = pd.merge(merged, dataframe, on=cam_id_name, how="outer")
-            merged.fillna(method="bfill", inplace=True)
+            merged = merged.sort_values(by=cam_id_name)
+            merged = merged.reset_index(drop=True)
             merged.fillna(method="ffill", inplace=True)
-            merged = remove_dup(merged, cam_id_name)
-            print(merged)
-            name_list.append(to_analysis + "_" + k)
+            merged.fillna(method="bfill", inplace=True)
+            # merged = remove_dup(merged, cam_id_name)
 
-    merged.columns = name_list
+            if dataframe.shape[1] > 1:
+                test_name_list.append(to_analysis + "_" + k)
 
-    return merged
+    merged.columns = ori_name_list + test_name_list
+    merged = drop_zero_and_na(merged, cam_id_name)
 
-
-# def dropnan(dataframe):
-#     """
-#     Drop all the rows in the dataframe that has NaN camera id (the process after shift_columns)
-#     :param dataframe: a pandas dataframe
-#     :return: a pandas dataframe after dropping
-#     """
-#     return dataframe.dropna(subset = ['Camera_Frame_ID_HIL'])
-#
+    return merged, test_name_list
 
 
 def remove_dup(dataframe, cam_id_name):
@@ -196,38 +213,11 @@ def remove_dup(dataframe, cam_id_name):
     :param dataframe: a pandas dataframe
     :return: a pandas dataframe after removing duplicates
     """
-    dataframe.drop_duplicates(inplace=True)
+    dataframe.drop_duplicates(subset=cam_id_name, inplace=True)
     return dataframe
 
 
-def generate_dataframe(directory, dbc_file_dir, dbc_channels, enum_list, val_list, cam_id_name):
-
-    start_time = time.time()
-
-    total_fullpath, total_messages, total_signals = load_total_matrix(dbc_file_dir, dbc_channels)
-
-    # ori_dir, t_dir = search_dir(directory)
-    #
-    # original_enum, original_val = read_all_and_combine(list_file_path(ori_dir), dbc, enum_list, val_list, cam_id_name)
-    # test_df_enum_arr = []
-    # test_df_val_arr = []
-
-    ori_files, t_files = search_dir(directory)
-
-    original_enum, original_val = read_all_and_combine(ori_files, dbc, enum_list, val_list, cam_id_name)
-
-    for t in t_files:
-        test_e, test_v = read_all_and_combine(t, dbc, enum_list, val_list, cam_id_name)
-        test_df_enum_arr.append(test_e)
-        test_df_val_arr.append(test_v)
-
-    end_time = time.time()
-    print("Total time spent on generating original and test dataframes from mf4 files: " + str(end_time - start_time) + " seconds")
-
-    return original_enum, original_val, test_df_enum_arr, test_df_val_arr
-
-
-# below is further data analysis and calculation
+# below is further data analysis and calculation methods
 
 def drop_zero_and_na(dataframe, camera_id_name):
     """
@@ -243,76 +233,61 @@ def drop_zero_and_na(dataframe, camera_id_name):
     return new
 
 
-def merge_and_calculate(original, test_list, to_analysis, cam_id_name):
-
-    merged = original.loc[:, [cam_id_name, to_analysis]]
-    test_selected = []
-    for df in test_list:
-        data = df.loc[:, [cam_id_name, to_analysis]]
-        test_selected.append(data)
-    for idx in range(len(test_selected)):
-        merged = pd.merge(merged, test_selected[idx], on=cam_id_name, how="outer")
-    name_list = [to_analysis + "_test" + str(j+1) for j in range(len(test_selected))]
-    merged.columns = [cam_id_name, "Original"] + name_list
-    merged = drop_zero_and_na(merged, cam_id_name)
-
-    merged["test_mean"] = merged[name_list].mean(axis=1)
-    merged["test_std"] = merged[name_list].std(axis=1)
-    return merged
-
-def large_std_cam_id(dataframe, std_lower_bound):
+def generate_stats(dataframe, test_name_list):
     """
-    Pick out the camera ids that have too large std values (larger than some pre-set lower bound)
+    Generate the test data's mean and std data from the given dataframe
+    :param dataframe: the dataframe containing all the merged data
+    :param test_name_list: a list containing test data's names (it is used to detect whether test data exists for this signal)
+    :return: a new dataframe with mean and std added, and a boolean flag value of whether there is test data for
+    """
+    if len(test_name_list) > 0:
+        flag = True
+        dataframe["test_mean"] = dataframe[test_name_list].mean(axis=1)
+        dataframe["test_std"] = dataframe[test_name_list].std(axis=1)
+    else:
+        flag = False
+    return dataframe, flag
+
+
+def large_std_cam_id(dataframe, cam_id_name, percentile=0.95):
+    """
+    Pick out the camera ids that have too large std values (larger than some pre-set percentile lower bound)
     :param dataframe: a pandas dataframe that has gone through merge_and_calculate operation
-    :param std_lower_bound: the lower bound of "too large std", any std over this value will be considered as a potential abnormal point
-    :return: a list containing numbers representing the camera ids of potential abnormal points
+    :param cam_id_name: a string representing the name of the cam id parameter
+    :param percentile: the percentile of the std lower bound
+    :return: a list containing numbers representing the camera ids of potential abnormal points, and a float number representing the lower bound of abnormal std
     """
+    # set the default lower bound to 95% largest data std
+    std_lower_bound = dataframe["test_std"].describe((1-percentile, percentile))[str(int(percentile*100))+"%"]
     filt = (dataframe["test_std"] >= std_lower_bound)
-    return list(dataframe[filt]["Cam_id"])
+    return list(dataframe[filt][cam_id_name].astype(int)), std_lower_bound
 
-def covert_cam_id_to_time(original, cam_id):
-    """
-    Convert the camera ids to the corresponding frame timestamps in the original dataframe
-    :param original: the original dataframe
-    :param cam_id: a list of numbers
-    :return: a pandas series of numbers, index is the camera id, value is the corresponding timestamp in original data
-    """
-    filt = (original["Cam_id"].isin(cam_id))
-    filtered_t = original[filt]["T"]
-    return filtered_t
 
-def convert_t_to_interval(time_and_id):
+def convert_to_interval(id_array):
     """
-    (This is not called in the main function, subject to change.) Convert some consecutive timestamps to a time interval for easier time-retrieval
-    :param time_and_id: a pandas series, index is camera id, value is the corresponding timestamp
-    :return: a list of strings, each string is either a time range, or a single timestamp
+    Convert some consecutive timestamps' id to some intervals for easier retrieval
+    :param id_array: a list containing all the camera ids of outliers
+    :return: a list of strings representing the abnormal camera id ranges
     """
     interval = []
-    indices = time_and_id.index
-    current = 0
-    start = indices[current]
-    length = 1
-    while True:
-        try:
-            end = indices[current + 1]
-            if end != start + length:
-                length = 1
-                if start == indices[current]:
-                    interval.append(str(time_and_id[start]))
-                else:
-                    interval.append(str(time_and_id[start])+"-"+str(time_and_id[indices[current]]))
-                current += 1
-                start = indices[current]
-            else:
-                length += 1
-                current += 1
-        except:
-            if length != 1:
-                interval.append(str(time_and_id[start])+"-"+str(time_and_id[end]))
-            else:
-                interval.append(str(time_and_id[end]))
-            break
+    current_interval = [id_array[0]]
+    digit = id_array[0] // 100
+    for i in range(1, len(id_array)):
+        now = id_array[i]
+        if now // 100 == digit:
+            current_interval.append(now)
+        elif now // 100 == digit + 1:
+            current_interval.append(now)
+            digit += 1
+        else:
+            if current_interval[-1] - current_interval[0] >= 5:
+                interval.append(str(current_interval[0]) + "-" + str(current_interval[-1]))
+            current_interval = [now]
+            digit = now // 100
+    if current_interval[-1] - current_interval[0] >= 5:
+        interval.append(str(current_interval[0]) + "-" + str(current_interval[-1]))
     return interval
+
 
 if __name__ == "__main__":
     path = "C:\\Users\\Z0050908\\Desktop\\hil_test\\"
@@ -320,23 +295,7 @@ if __name__ == "__main__":
     signal = "C:\\Users\\Z0050908\\Desktop\\FR-IFC-Private CAN_Checklist.xlsx"
 
     e, v, cam = generate_wanted_signal(signal)
-    # ori, enum, val = generate_dataframe(path, dbc_path, e, v, cam)
-    #
-    # print(merge_and_calculate(ori, val, "BridgeDistance"))
 
-    # dbc = glob.glob(dbc_path + "*.dbc")
-    #
-    # ori_dir, t_dir = search_dir(path)
-    # print(list_file_path(ori_dir))
-    # for t in t_dir:
-    #     file_paths = list_file_path(t)
-    #     print(read_all_and_combine(file_paths, dbc, e, v, cam))
-
-    # o_e, o_v, t_e, t_v = generate_dataframe(path, dbc_path, e, v, cam)
-    # print(o_e)
-    # print(o_v)
-    # print(t_e)
-    # print(t_v)
     dbcs = {"Ch3": ['GWM V71 CAN 01C.dbc'], "Ch4": ['FR-IFC-Private CAN.dbc'], "Ch5": ['GWM V71 CAN 01C.dbc'], "Ch6": ['FR-IFC-Private CAN.dbc']}
     A, B, C = load_total_matrix(dbc_path, dbcs)
 
@@ -344,6 +303,15 @@ if __name__ == "__main__":
     print(dic)
     data_dic = load_mf4_to_dic_for_all(dic, A, e+v)
 
-    df = merge_one_type_data(data_dic, "IFC_obj01_Dx", cam)
-    # IFC_obj01_Dx
-    print(df.head(50))
+    df, tn = merge_one_type_data(data_dic, 'IFC_obj01_Dx', cam)
+    # val: IFC_obj01_Dx
+    # enum: BridgeDistance
+    # none: FS_Out_Of_Calib
+    df_stat, changed = generate_stats(df, tn)
+
+    print(df_stat.head(50))
+    print(df_stat.tail(50))
+
+    abnormal, lower = large_std_cam_id(df_stat, cam, 0.95)
+    plot_data_and_stats_with_outliers(df_stat, dbc_path, changed, "IFC_obj01_Dx", cam, lower)
+    # plot_data_and_stats(df_stat, dbc_path, changed, "IFC_obj01_Dx", cam)

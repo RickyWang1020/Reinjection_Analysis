@@ -1,7 +1,7 @@
 """
 Function: test functions of reading mf4 files using the corresponding dbc and extract the wanted signals from excel
 Author: Yiming Gu, Xinran Wang
-Date: 09/01/2020
+Date: 09/02/2020
 """
 
 import asammdf
@@ -10,10 +10,12 @@ import glob
 import pandas as pd
 import os
 import time
+import sys
 
 from pyparsing import Word, Literal, Keyword, Optional, Suppress, Group, QuotedString, Combine
 from pyparsing import printables, nums, alphas, alphanums, LineEnd, ZeroOrMore, OneOrMore
 
+sys.setrecursionlimit(100000)
 pd.set_option('expand_frame_repr', False)
 
 # DBC section types
@@ -32,48 +34,6 @@ BADEFREF = 'BA_DEF_REF_'
 # def load_dbc(dbc_file_dir):
 #     dbc = glob.glob(dbc_file_dir + "FR*.dbc")
 #     return dbc
-
-def load_dbc(file_path):
-    dbc = DBCFile()
-    with open(file_path, 'r', encoding='utf8', errors='replace') as f:
-        dbc.read_dbcfile(f.read())
-    f.close()
-
-    msg_dict = {message.id_dec: {
-                'id_dec': message.id_dec,
-                'id_hex': message.id_hex,
-                'name': message.name,
-                'dlc': message.dlc,
-                'comment': message.comment,
-                'signals': {signal.name: {'name': signal.name,
-                                            'multi_type': signal.multi_type,
-                                            'start_bit': signal.start_bit,
-                                            'length_bit': signal.length_bit,
-                                            'byte_order':  signal.byte_order,
-                                            'value_type': signal.value_type,
-                                            'factor': signal.factor,
-                                            'offset': signal.offset,
-                                            'value_min': signal.value_min,
-                                            'value_max': signal.value_max,
-                                            'unit': signal.unit,
-                                            'value_table': signal.value_table,
-                                            'comment': signal.comment}
-                            for signal in message.signals}}
-                for message in dbc.messages if message.name != 'VECTOR__INDEPENDENT_SIG_MSG'}
-    return msg_dict
-
-def num(s):
-    """
-    convert a string to integer or float
-    :param s: a string of number
-    :return: an int or float type number
-    """
-    try:
-        return int(s)
-    except ValueError:
-        return float(s)
-    else:
-        raise ValueError('Expected integer or floating point number.')
 
 
 class Signal:
@@ -128,7 +88,7 @@ class Signal:
     #                       self.comment)
 
 
-class Message(object):
+class Message:
     """
     CAN Message object
     Attributes:
@@ -161,7 +121,6 @@ class Message(object):
 
 class DBCFile:
     """CAN database file.
-
     """
 
     def __init__(self, messages=None):
@@ -219,52 +178,52 @@ class DBCFile:
                 for signal in item[5]:
                     if signal[2] == 'M':
                         message.signals.append(Signal(
-                                            name=signal[1],
-                                            multi_type='M',
-                                            start_bit=int(signal[3][0]),
-                                            length_bit=int(signal[3][1]),
-                                            byte_order=(0 if signal[3][2] == '0' else 1),
-                                            value_type=(0 if signal[3][3] == '+' else 1),
-                                            factor=num(signal[4][0]),
-                                            offset=num(signal[4][1]),
-                                            value_min=num(signal[5][0]),
-                                            value_max=num(signal[5][1]),
-                                            unit=signal[6],
-                                            value_table=None,
-                                            comment=None
-                                        ))
+                            name=signal[1],
+                            multi_type='M',
+                            start_bit=int(signal[3][0]),
+                            length_bit=int(signal[3][1]),
+                            byte_order=(0 if signal[3][2] == '0' else 1),
+                            value_type=(0 if signal[3][3] == '+' else 1),
+                            factor=num(signal[4][0]),
+                            offset=num(signal[4][1]),
+                            value_min=num(signal[5][0]),
+                            value_max=num(signal[5][1]),
+                            unit=signal[6],
+                            value_table=None,
+                            comment=None
+                        ))
                     elif signal[2][0] == 'm':
                         message.signals.append(Signal(
-                                            name=signal[1],
-                                            multi_type=int(signal[2][1]),
-                                            start_bit=int(signal[3][0]),
-                                            length_bit=int(signal[3][1]),
-                                            byte_order=(0 if signal[3][2] == '0' else 1),
-                                            value_type=(0 if signal[3][3] == '+' else 1),
-                                            factor=num(signal[4][0]),
-                                            offset=num(signal[4][1]),
-                                            value_min=num(signal[5][0]),
-                                            value_max=num(signal[5][1]),
-                                            unit=signal[6],
-                                            value_table=None,
-                                            comment=None
-                                        ))
+                            name=signal[1],
+                            multi_type=int(signal[2][1]),
+                            start_bit=int(signal[3][0]),
+                            length_bit=int(signal[3][1]),
+                            byte_order=(0 if signal[3][2] == '0' else 1),
+                            value_type=(0 if signal[3][3] == '+' else 1),
+                            factor=num(signal[4][0]),
+                            offset=num(signal[4][1]),
+                            value_min=num(signal[5][0]),
+                            value_max=num(signal[5][1]),
+                            unit=signal[6],
+                            value_table=None,
+                            comment=None
+                        ))
                     else:
                         message.signals.append(Signal(
-                                                name=signal[1],
-                                                multi_type='N',
-                                                start_bit=int(signal[2][0]),
-                                                length_bit=int(signal[2][1]),
-                                                byte_order=(0 if signal[2][2] == '0' else 1),
-                                                value_type=(0 if signal[2][3] == '+' else 1),
-                                                factor=num(signal[3][0]),
-                                                offset=num(signal[3][1]),
-                                                value_min=num(signal[4][0]),
-                                                value_max=num(signal[4][1]),
-                                                unit=signal[5],
-                                                value_table=None,
-                                                comment=None
-                                            ))
+                            name=signal[1],
+                            multi_type='N',
+                            start_bit=int(signal[2][0]),
+                            length_bit=int(signal[2][1]),
+                            byte_order=(0 if signal[2][2] == '0' else 1),
+                            value_type=(0 if signal[2][3] == '+' else 1),
+                            factor=num(signal[3][0]),
+                            offset=num(signal[3][1]),
+                            value_min=num(signal[4][0]),
+                            value_max=num(signal[4][1]),
+                            unit=signal[5],
+                            value_table=None,
+                            comment=None
+                        ))
                 for sig in message.signals:
                     # if message.id_dec in valtypes.keys():
                     #     if sig.name in valtypes[message.id_dec]:
@@ -279,7 +238,6 @@ class DBCFile:
 
     def create_dbc_grammar(self):
         """Create DBC grammar.
-
         """
 
         # DBC file grammar
@@ -305,26 +263,32 @@ class DBCFile:
         discard = Suppress(Keyword('BS_') + colon)
         ecu = Group(Keyword('BU_') + colon + ZeroOrMore(Word(printables).setWhitespaceChars(' \t')))
         signal = Group(Keyword(SIGNAL) + word + ZeroOrMore(multiplexor | multiplexed) + colon +
-                Group(integer + pipe + integer + at + integer + sign) +
-                Group(lp + number + comma + number + rp) +
-                Group(lb + number + pipe + number + rb) +
-                QuotedString('"', multiline=True) + word)
+                       Group(integer + pipe + integer + at + integer + sign) +
+                       Group(lp + number + comma + number + rp) +
+                       Group(lb + number + pipe + number + rb) +
+                       QuotedString('"', multiline=True) + word)
         message = Group(Keyword(MESSAGE) + integer + word + colon + integer + word + Group(ZeroOrMore(signal)))
         comment = Group(Keyword(COMMENT) + (
-            (Keyword(MESSAGE) + integer + QuotedString('"', multiline=True) + scolon) |
-            (Keyword(SIGNAL) + integer + word + QuotedString('"', multiline=True) + scolon)))
+                (Keyword(MESSAGE) + integer + QuotedString('"', multiline=True) + scolon) |
+                (Keyword(SIGNAL) + integer + word + QuotedString('"', multiline=True) + scolon)))
         badef = Group(Keyword(BADEF) + Optional(Keyword('BU_') | Keyword('BO_') | Keyword('SG_') | Keyword('EV_')) +
-                QuotedString('"') + (((Keyword('INT') | Keyword('HEX') | Keyword('FLOAT')) + integer + integer + scolon) | (Keyword('ENUM') +
-                OneOrMore(QuotedString('"') + Optional(comma)) + scolon) | (Keyword('STRING')+scolon)))
-        badefdef = Group(Keyword(BADEFDEF) + QuotedString('"') + (QuotedString('"')|integer) + scolon)
-        badefref = Group(Keyword(BADEFREF) + QuotedString('"') + (QuotedString('"')|integer) + scolon)
-        ba = Group(Keyword(BA) + QuotedString('"') + Optional(Keyword('BU_') | Keyword('BO_') | Keyword('SG_') | Keyword('EV_')) + (QuotedString('"') | OneOrMore(Word(alphanums))) + scolon)
+                      QuotedString('"') + (((Keyword('INT') | Keyword('HEX') | Keyword(
+            'FLOAT')) + integer + integer + scolon) | (Keyword('ENUM') +
+                                                       OneOrMore(QuotedString('"') + Optional(comma)) + scolon) | (
+                                                       Keyword('STRING') + scolon)))
+        badefdef = Group(Keyword(BADEFDEF) + QuotedString('"') + (QuotedString('"') | integer) + scolon)
+        badefref = Group(Keyword(BADEFREF) + QuotedString('"') + (QuotedString('"') | integer) + scolon)
+        ba = Group(Keyword(BA) + QuotedString('"') + Optional(
+            Keyword('BU_') | Keyword('BO_') | Keyword('SG_') | Keyword('EV_')) + (
+                               QuotedString('"') | OneOrMore(Word(alphanums))) + scolon)
 
-        valtable = Group(Keyword('VAL_TABLE_') + Word(alphanums + '_') + Group(OneOrMore(Group(integer + QuotedString('"', multiline=True)))) + scolon)
+        valtable = Group(Keyword('VAL_TABLE_') + Word(alphanums + '_') + Group(
+            OneOrMore(Group(integer + QuotedString('"', multiline=True)))) + scolon)
 
         valtype = Group(Keyword(VALTYPE) + integer + word + colon + integer + scolon)
 
-        choice = Group(Keyword(VALUETABLE) + integer + word + Group(OneOrMore(Group(integer + QuotedString('"', multiline=True)))) + scolon)
+        choice = Group(Keyword(VALUETABLE) + integer + word + Group(
+            OneOrMore(Group(integer + QuotedString('"', multiline=True)))) + scolon)
 
         entry = version | symbols | discard | ecu | message | comment | ba | badef | badefdef | badefref | valtable | valtype | choice
         grammar = OneOrMore(entry)
@@ -344,17 +308,68 @@ class DBCFile:
         return message.decode(data)
 
 
-def read_mf4(file_path, dbc):
-    mdf = MDF(file_path, "r")
-    print(mdf)
-    information = mdf.extract_can_logging(dbc)
-    data = information.to_dataframe()
-    return data
+def load_dbc(file_path):
+    """
+    Load the dbc file from the given directory
+    :param file_path: the path of directory storing all dbc files
+    :return: a dictionary containing info extracted from DBC
+    """
+    dbc = DBCFile()
+    with open(file_path, 'r', encoding='utf8', errors='replace') as f:
+        dbc.read_dbcfile(f.read())
+    f.close()
+
+    msg_dict = {message.id_dec: {
+                'id_dec': message.id_dec,
+                'id_hex': message.id_hex,
+                'name': message.name,
+                'dlc': message.dlc,
+                'comment': message.comment,
+                'signals': {signal.name: {'name': signal.name,
+                                            'multi_type': signal.multi_type,
+                                            'start_bit': signal.start_bit,
+                                            'length_bit': signal.length_bit,
+                                            'byte_order':  signal.byte_order,
+                                            'value_type': signal.value_type,
+                                            'factor': signal.factor,
+                                            'offset': signal.offset,
+                                            'value_min': signal.value_min,
+                                            'value_max': signal.value_max,
+                                            'unit': signal.unit,
+                                            'value_table': signal.value_table,
+                                            'comment': signal.comment}
+                            for signal in message.signals}}
+                for message in dbc.messages if message.name != 'VECTOR__INDEPENDENT_SIG_MSG'}
+    return msg_dict
+
+
+def num(s):
+    """
+    convert a string to integer or float
+    :param s: a string of number
+    :return: an int or float type number
+    """
+    try:
+        return int(s)
+    except ValueError:
+        return float(s)
+    else:
+        raise ValueError('Expected integer or floating point number.')
+
+
+# def read_mf4(file_path, dbc):
+#     mdf = MDF(file_path, "r")
+#     print(mdf)
+#     information = mdf.extract_can_logging(dbc)
+#     data = information.to_dataframe()
+#     return data
+
 
 def extract_wanted_signal_data(dataframe, signal_excel_path):
     signals = pd.read_excel(signal_excel_path)
     names = list(signals["Name"])
     return dataframe.reindex(columns=names)
+
 
 def load_total_matrix(root_path, dbc_channel_files):
     total_messages, total_signals, total_fullpath = {}, {}, {}
@@ -382,6 +397,13 @@ def load_total_matrix(root_path, dbc_channel_files):
 
 
 def loadMF4data2Dict(file, wanted_signals, dbcfiles=None):
+    """
+    Use the given signals, extract the wanted data from the data file
+    :param file: the path of mf4 file
+    :param wanted_signals: a list containing wanted signals
+    :param dbcfiles: the total_fullpath generated from load_total_matrix
+    :return: a dictionary
+    """
     if not os.path.exists(file):
         print("Data file not found.")
         return None
@@ -423,7 +445,7 @@ def loadMF4data2Dict(file, wanted_signals, dbcfiles=None):
 
     if len(data.keys()) == 0:
         print('No valid signal in file: ' + os.path.split(file)[-1])
-    print('File: ' + os.path.split(file)[-1] + ' load time: ' + str(time.time() - t0) + 's')
+    print('Loaded: ' + os.path.split(file)[-1] + ', time elapsed: ' + str(time.time() - t0) + 's')
     return data
 
 
@@ -460,5 +482,5 @@ if __name__ == "__main__":
             print("exist:", s, dat[s])
         except:
             print("not exist:",  s)
-
+    print(1)
 

@@ -4,6 +4,7 @@ path:
   path_dbc_dir: C:\Users\Z0050908\Downloads
   path_signal_excel: C:\Users\Z0050908\Desktop\FR-IFC-Private CAN_Checklist.xlsx
   path_to_create_folder: C:\Users\Z0050908\Desktop
+  path_to_create_ppt: C:\Users\Z0050908\Desktop
 
 dbc_channels:
   "Ch3": ['GWM V71 CAN 01C.dbc']

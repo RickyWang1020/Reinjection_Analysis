@@ -1,13 +1,16 @@
 """
-Function: plot solely original data, solely Reinjection data, a combination of original data, Reinjection mean and Reinjection std
+Function: plot data and stats and abnormal values
 Author: Xinran Wang
-Date: 07/22/2020
+Date: 09/02/2020
 """
 
 import matplotlib.pyplot as plt
 import os
 
-def create_folder(directory, name):
+plt.rc('font', family='Tahoma')
+
+
+def create_folder(directory, name='ReinjectionFigures'):
     """
     Create a folder in the assigned directory with assigned name
     :param directory: the directory where the new folder will be located
@@ -24,72 +27,127 @@ def create_folder(directory, name):
         print("Created a new folder in: " + directory)
         return path
 
-def plot_original(dataframe, save_path, index, to_analysis):
-    """
-    Plot only the original data based on the given data column and save the figure to the given path
-    :param dataframe: a pandas dataframe of the original data excel
-    :param save_path: a string representing the path where the output figure should locate in
-    :param to_analysis: a string corresponding to the column on the dataframe, indicating the data to look into
-    :return: None
-    """
-    fig = plt.figure(figsize=(20,8),dpi=80)
-    ax = plt.subplot(111)
-    plt.plot(dataframe['Cam_id'], dataframe[to_analysis], color = 'r')
-    plt.title("Changes in Original Data's " + to_analysis + " as a function of Camera ID", color = 'b', fontsize = 18)
-    plt.xlabel('Cam_id', color = 'b', fontsize = 15)
-    plt.ylabel(to_analysis, color = 'b', fontsize = 15)
-    plt.savefig(os.path.join(os.path.abspath(save_path), str(index) + "-1-" + to_analysis + "-OriginalFig" + ".png"))
-    #plt.show()
 
-def plot_tests(df_array, save_path, index, to_analysis):
+def plot_ori_and_test(dataframe, save_path, to_analysis, cam_id_name):
     """
-    Plot all the Reinjection data based on the given data column and save the figure to the given path
-    :param df_array: a list containing several pandas dataframes, each dataframe holds data of corresponding Reinjection data excel
+    Plot the original and test data based on the given data column and save the figure to the given path
+    :param dataframe: a pandas dataframe of the test data excel
     :param save_path: a string representing the path where the output figure should locate in
     :param to_analysis: a string corresponding to the column on the dataframe, indicating the data to look into
+    :param cam_id_name: a string representing the name of the cam id parameter
     :return: None
     """
-    fig = plt.figure(figsize=(20,8),dpi=80)
+    fig = plt.figure(figsize=(20, 8), dpi=80)
     ax = plt.subplot(111)
     name_list = []
-    colors = ["r", "g", "b", "y", "c"]
-    for i in range(len(df_array)):
-        df = df_array[i]
-        name_list.append("Test" + str(i+1))
-        plt.plot(df['Cam_id'], df[to_analysis], color = colors[i])
-    plt.title("Changes in Test Data's " + to_analysis + " as a function of Camera ID", color='b', fontsize=18)
-    plt.xlabel('Cam_id', color = 'b', fontsize = 15)
-    plt.ylabel(to_analysis, color = 'b', fontsize = 15)
-    ax.legend(name_list, loc=1, fontsize=12)
-    plt.savefig(os.path.join(os.path.abspath(save_path), str(index) + "-2-" + to_analysis + "-TestFig" + ".png"))
-    #plt.show()
+    # colors = ["r", "g", "b", "y", "c"]
+    index_names = list(dataframe.columns)
+    for n in index_names:
+        if n.startswith(to_analysis):
+            name = n.split("_")[-1]
+            name_list.append(name)
+            plt.plot(dataframe[cam_id_name], dataframe[n])
 
-def plot_statistics(dataframe, save_path, index, to_analysis, include_original = True, include_mean = True, include_std = True):
+    plt.title("Comparison of Original and Test Data's " + to_analysis + " as a function of Camera ID", color='navy', fontsize=18, y=1.03)
+    plt.xlabel(cam_id_name, color='navy', fontsize=15)
+    plt.ylabel(to_analysis, color='navy', fontsize=15)
+    ax.legend(name_list, loc=1, fontsize=12)
+
+    square_bracket = to_analysis.find("[")
+    if square_bracket != -1:
+        file_name = to_analysis[:square_bracket]
+        plt.savefig(os.path.join(os.path.abspath(save_path), file_name + "-OriTestFig" + ".png"))
+    else:
+        plt.savefig(os.path.join(os.path.abspath(save_path), to_analysis + "-OriTestFig" + ".png"))
+    # plt.show()
+
+
+def plot_data_and_stats(dataframe, save_path, has_stats, to_analysis, cam_id_name):
     """
-    Plot the original data, Reinjection data's mean and/or std in one figure and save the figure to the given path
-    :param dataframe: the already-merged dataframe after merge_and_calculate process based on a specific data column
+    Plot all the test data as well as the mean and std statistics in one figure
+    :param dataframe: a pandas dataframe of the test data excel
     :param save_path: a string representing the path where the output figure should locate in
+    :param has_stats: a boolean value of whether this dataframe has statistics (if no test case exists, then no stats)
     :param to_analysis: a string corresponding to the column on the dataframe, indicating the data to look into
-    :param include_original: a boolean value of whether original data should appear in this figure
-    :param include_mean: a boolean value of whether Reinjection data's mean should appear in this figure
-    :param include_std: a boolean value of whether Reinjection data's std should appear in this figure
-    :return:
+    :param cam_id_name: a string representing the name of the cam id parameter
+    :return: None
     """
-    fig = plt.figure(figsize=(20,8),dpi=80)
-    ax = plt.subplot(111)
-    legend_list = []
-    if include_original:
-        ax.plot(dataframe["Cam_id"], dataframe["Original"], color = "deepskyblue")
-        legend_list.append('Original_data')
-    if include_mean:
-        ax.plot(dataframe["Cam_id"], dataframe["test_mean"], color = "forestgreen")
-        legend_list.append('Test_mean')
-    if include_std:
-        ax.plot(dataframe["Cam_id"], dataframe["test_std"], color = "orange")
-        legend_list.append('Test_std')
-    plt.title("Changes in " + to_analysis + "'s std and mean of Test Data and " + to_analysis + " of Original Data as a function of Camera ID", color='b', fontsize=18)
-    plt.xlabel('Cam_id', color='b', fontsize=15)
-    plt.ylabel(to_analysis, color='b', fontsize=15)
-    ax.legend(legend_list, loc=1, fontsize=12)
-    plt.savefig(os.path.join(os.path.abspath(save_path), str(index) + "-3-" + to_analysis + "-Merged_" + "_".join(legend_list) + ".png"))
-    #plt.show()
+    fig = plt.figure(figsize=(20, 8), dpi=80)
+    fig.suptitle("Comparison of Original and Test Data's " + to_analysis + " as a function of Camera ID, with mean and std presented", color='navy', fontsize=18, y=0.95)
+    ax_up = plt.subplot(211)
+    ax_down = plt.subplot(212)
+    name_list = []
+    colors = ["mediumseagreen", "orangered"]
+    index_names = list(dataframe.columns)
+    if has_stats:
+        stats_list = index_names[-2:]
+    else:
+        stats_list = []
+    for n in index_names:
+        if n.startswith(to_analysis):
+            name = n.split("_")[-1]
+            name_list.append(name)
+            ax_up.plot(dataframe[cam_id_name], dataframe[n])
+    for idx, m_s in enumerate(stats_list):
+        ax_down.plot(dataframe[cam_id_name], dataframe[m_s], color=colors[idx])
+
+    plt.xlabel(cam_id_name, color='navy', fontsize=15)
+    plt.ylabel(to_analysis, color='navy', fontsize=15, y=1.7)
+    ax_up.legend(name_list, loc=1, fontsize=12)
+    ax_down.legend(stats_list, loc=1, fontsize=12)
+
+    square_bracket = to_analysis.find("[")
+    if square_bracket != -1:
+        file_name = to_analysis[:square_bracket]
+        plt.savefig(os.path.join(os.path.abspath(save_path), file_name + "-StatsFig" + ".png"))
+    else:
+        plt.savefig(os.path.join(os.path.abspath(save_path), to_analysis + "-StatsFig" + ".png"))
+    # plt.show()
+
+
+def plot_data_and_stats_with_outliers(dataframe, save_path, has_stats, to_analysis, cam_id_name, threshold):
+    """
+    Plot all the test data as well as the mean, std statistics and the outlier line of data analysis in one figure
+    :param dataframe: a pandas dataframe of the test data excel
+    :param save_path: a string representing the path where the output figure should locate in
+    :param has_stats: a boolean value of whether this dataframe has statistics (if no test case exists, then no stats)
+    :param to_analysis: a string corresponding to the column on the dataframe, indicating the data to look into
+    :param cam_id_name: a string representing the name of the cam id parameter
+    :param threshold: the threshold indicating the outlier bottom line
+    :return: None
+    """
+    fig = plt.figure(figsize=(20, 8), dpi=80)
+    fig.suptitle("Changes in Test Data's " + to_analysis + " as a function of Camera ID, with mean and std presented", color='navy', fontsize=18, y=0.95)
+    ax_up = plt.subplot(211)
+    ax_down = plt.subplot(212)
+    name_list = []
+    colors = ["mediumseagreen", "orangered"]
+    index_names = list(dataframe.columns)
+    if has_stats:
+        stats_list = index_names[-2:]
+    else:
+        stats_list = []
+    for n in index_names:
+        if n.startswith(to_analysis):
+            name = n.split("_")[-1]
+            name_list.append(name)
+            ax_up.plot(dataframe[cam_id_name], dataframe[n])
+    for idx, m_s in enumerate(stats_list):
+        ax_down.plot(dataframe[cam_id_name], dataframe[m_s], color=colors[idx])
+    plt.xlabel(cam_id_name, color='navy', fontsize=15)
+    plt.ylabel(to_analysis, color='navy', fontsize=15, y=1.7)
+    plt.axhline(y=threshold, ls=":", c="purple")
+
+    x_axis_max = plt.axis()[1]
+    ax_down.text(x_axis_max+50, threshold, "Abnormal data:\nstd >= {:.5f}".format(threshold), fontsize=12, color='navy', bbox=dict(facecolor='white', alpha=0.5))
+    ax_up.legend(name_list, loc=1, fontsize=12)
+    ax_down.legend(stats_list, loc=1, fontsize=12)
+
+    square_bracket = to_analysis.find("[")
+    if square_bracket != -1:
+        file_name = to_analysis[:square_bracket]
+        plt.savefig(os.path.join(os.path.abspath(save_path), file_name + "-StatsAbnormalFig" + ".png"))
+    else:
+        plt.savefig(os.path.join(os.path.abspath(save_path), to_analysis + "-StatsAbnormalFig" + ".png"))
+    # plt.show()
+

@@ -1,7 +1,7 @@
 """
 Function: process raw data excel (original and Reinjection data), generate aligned pandas dataframes, perform mean and standard deviation operation on Reinjection data, and can filter out potential problematic data (those with large std)
 Author: Xinran Wang
-Date: 08/31/2020
+Date: 08/14/2020
 """
 
 import pandas as pd
@@ -9,9 +9,10 @@ import xlrd
 import os
 from plot import *
 
-pd.set_option('display.max_columns',13)
+pd.set_option('display.max_columns', 13)
 pd.set_option('expand_frame_repr', False)
-pd.set_option('display.max_columns',None)
+pd.set_option('display.max_columns', None)
+
 
 def search_dir(directory):
     """
@@ -30,6 +31,7 @@ def search_dir(directory):
 
     return test_file
 
+
 def generate_file_path(directory, name):
     """
     Generates the path of a file
@@ -38,6 +40,7 @@ def generate_file_path(directory, name):
     :return: a string of the file's absolute path
     """
     return os.path.join(directory, name)
+
 
 def load_and_concat_data(path):
     """
@@ -55,6 +58,7 @@ def load_and_concat_data(path):
 
     return dataframe
 
+
 def shift_columns(dataframe):
     """
     Shift the columns of dataframes to make one group of data align to one row (used to process the old version of messy column data)
@@ -66,6 +70,7 @@ def shift_columns(dataframe):
         dataframe_copy[col] = dataframe_copy[col].shift(1)
     return dataframe_copy
 
+
 def fill_na_and_remove_dup(dataframe):
     """
     Fill NAs with bfill method and remove duplicated data
@@ -76,6 +81,7 @@ def fill_na_and_remove_dup(dataframe):
     new_dataframe.drop_duplicates(subset='Camera_Frame_ID', keep="last", inplace=True)
     new_dataframe = new_dataframe.reset_index(drop=True)
     return new_dataframe
+
 
 # subject to change
 def remove_outlier(dataframe, outlier_range, to_detect):
@@ -90,6 +96,7 @@ def remove_outlier(dataframe, outlier_range, to_detect):
     after_remove = dataframe.drop(dataframe[filt].index)
     after_remove = after_remove.reset_index(drop=True)
     return after_remove
+
 
 def generate_dataframe(directory):
     """
@@ -124,6 +131,7 @@ def drop_zero_and_na(dataframe):
     new = new.reset_index(drop=True)
     return new
 
+
 def merge_and_calculate(test_list, to_analysis):
     """
     Call this function to merge original data and Reinjection data into one dataframe by the type of value to analysis, generate mean and std values of Reinjection data and add to the end of merged dataframe
@@ -149,6 +157,7 @@ def merge_and_calculate(test_list, to_analysis):
 
     return merged
 
+
 def large_std_cam_id(dataframe, percentile=0.95):
     """
     Pick out the camera ids that have too large std values (larger than some pre-set percentile lower bound)
@@ -160,6 +169,7 @@ def large_std_cam_id(dataframe, percentile=0.95):
     std_lower_bound = dataframe["test_std"].describe((1-percentile, percentile))[str(int(percentile*100))+"%"]
     filt = (dataframe["test_std"] >= std_lower_bound)
     return list(dataframe[filt]["Camera_Frame_ID"].astype(int)), std_lower_bound
+
 
 def convert_to_interval(id_array):
     """
@@ -185,6 +195,7 @@ def convert_to_interval(id_array):
     if current_interval[-1] - current_interval[0] >= 5:
         interval.append(str(current_interval[0]) + "-" + str(current_interval[-1]))
     return interval
+
 
 if __name__ == "__main__":
     dirs = search_dir("C:\\Users\\Z0050908\\Desktop\\to_analysis")

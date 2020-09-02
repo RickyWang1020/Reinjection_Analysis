@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import os
 plt.rc('font', family='Arial')
 
+
 def create_folder(directory, name='ReinjectionFigures'):
     """
     Create a folder in the assigned directory with assigned name
@@ -24,6 +25,7 @@ def create_folder(directory, name='ReinjectionFigures'):
         os.mkdir(path)
         print("Created a new folder in: " + directory)
         return path
+
 
 def plot_original(dataframe, save_path, index, to_analysis):
     """
@@ -42,6 +44,7 @@ def plot_original(dataframe, save_path, index, to_analysis):
     plt.ylabel(to_analysis, color='b', fontsize = 15)
     plt.savefig(os.path.join(os.path.abspath(save_path), str(index) + "-1-" + to_analysis + "-OriginalFig" + ".png"))
     #plt.show()
+
 
 def plot_tests(dataframe, save_path, to_analysis):
     """
@@ -73,6 +76,7 @@ def plot_tests(dataframe, save_path, to_analysis):
     else:
         plt.savefig(os.path.join(os.path.abspath(save_path), to_analysis + "-TestFig" + ".png"))
     # plt.show()
+    
     
 def plot_tests_and_stats(dataframe, save_path, to_analysis):
     """
@@ -109,6 +113,7 @@ def plot_tests_and_stats(dataframe, save_path, to_analysis):
     else:
         plt.savefig(os.path.join(os.path.abspath(save_path), to_analysis + "-TestStatsFig" + ".png"))
     # plt.show()
+
 
 def plot_tests_and_stats_with_outliers(dataframe, save_path, to_analysis, threshold):
     """

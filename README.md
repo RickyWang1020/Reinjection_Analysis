@@ -42,7 +42,7 @@ Use CAN .DBC files to extract data from .MF4 log files using *Asammdf*, visualiz
   - `path_to_create_folder`: the target directory to create a folder to put figures
   - `path_to_create_ppt`: the target directory to create the PPT file
 
-- `dbc_channels`: a dictionary, key is the CAN channel name, value is the corresponding `.dbc` file name (since the `.dbc` files' location is specified in `path_dbc_dir`, it is enough to just include the `.dbc` file name instead of the absolute path)
+- `dbc_channels`: a dictionary, key is the CAN channel name, value is the corresponding list of `.dbc` file name(s) (since the `.dbc` files' location is specified in `path_dbc_dir`, it is enough to just include the `.dbc` file name instead of the absolute path)
 
   ```
   Example:
@@ -51,6 +51,24 @@ Use CAN .DBC files to extract data from .MF4 log files using *Asammdf*, visualiz
   "Ch5": ['GWM V71 CAN 01C.dbc']
   "Ch6": ['FR-IFC-Private CAN.dbc']
   ```
+
+## Problems Encountered & Solved
+
+1. Reading & converting MF4 files: directly using `asammdf.MDF.extract_can_logging(dbc)` will lead to potential channel confusion if the DBC channels are not fixed for every MF4 log files. An alternative would be manually extracting every channel information from the `.dbc` file, and do `extract_can_logging` on every existing channels (this operation requires `asammdf.MDF.bus_logging_map` method)
+
+2. Different CAN signals have different data-collection frenquencies: when merging data into one dataframe, the data need to be aligned to the `camera id` signal so as to be analyzed and plotted. However, the data-collection frenquency of `camera id` signal does not always match that of other signals, leading to some missing data cells in the merged dataframe (e.g., `camera id` might be collected every 10 ms, but another signal is collected every 15 ms). After discussing with validation engineers, I decided to use `ffill` (and `bfill`) method to fill in the missing data, and keep the unique `camera id`s after filling, so that there will not be duplicated `camera id` in the plot, and the data's consistency is retained
+
+3. Some trivial structural problems: the data folder structure, the nested dictionary structure of `list_file_path` output and `load_mf4_to_dic_for_all`, aiming to reduce time and space complexity when reading and accessing various data files
+
+    - Reading a data file containing over 4000 rows of timestamp data and 1500 columns of signals only takes 3 seconds
+  
+    - Generating dataframes and plotting for each signal only takes about 1 second
+
+## Future Improvements
+
+1. The robustness of this program can be enhanced: give fewer restrictions on the data folder's structure, and a better method of distinguihsing `Original` and `Test` data files
+
+2. Can add a GUI window for the user to select data files
 
 ## PPT Report Demo
 
